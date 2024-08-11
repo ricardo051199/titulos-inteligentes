@@ -1,40 +1,65 @@
 "use client";
 
-import Link from "next/link";
-import type { NextPage } from "next";
 import { useAccount } from "wagmi";
 import { useState } from "react";
-import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { Address } from "~~/components/scaffold-eth";
+import { ethers } from "ethers";
+import deployedContracts from "../contracts/deployedContracts"; // Ajusta la ruta si es necesario
 
-const Home: NextPage = () => {
+const Home = () => {
   const { address: connectedAddress } = useAccount();
   const [pdfUploaded, setPdfUploaded] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [selectedOption, setSelectedOption] = useState("");
   const [field1, setField1] = useState("");
   const [field2, setField2] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
   const [isValidationSuccess, setIsValidationSuccess] = useState(false);
 
+  // Configuración del contrato
+  const contractAddress = deployedContracts[31337].YourContract.address; // Usando la red local como ejemplo
+  const contractABI = deployedContracts[31337].YourContract.abi;
+
+  // Crear un proveedor y un signer usando ethers.js
+  let provider: ethers.BrowserProvider | undefined;
+  let signer: ethers.Signer | undefined;
+  let contract: ethers.Contract | undefined;
+
+  if (typeof window !== "undefined" && window.ethereum) {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = provider.getSigner();
+    contract = new ethers.Contract(contractAddress, contractABI, signer);
+  }
+
+  // Manejar la subida del archivo PDF
   const handlePdfUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type === "application/pdf") {
       setPdfFile(file);
       setPdfUploaded(true);
     } else {
-      alert("Please upload a valid PDF file.");
+      alert("Por favor, sube un archivo PDF válido.");
     }
   };
 
-  const handleVerification = () => {
-    if (field1 && field2 && selectedOption) {
-      // Si todos los campos están completos
-      setValidationMessage("Validación exitosa");
-      setIsValidationSuccess(true);
-    } else {
-      // Si falta completar algún campo
-      setValidationMessage("Validación fallida: Por favor, complete todos los campos.");
+  // Manejar la validación del certificado
+  const handleVerification = async () => {
+    try {
+      if (field1 && field2 && pdfFile && contract) {
+        const hasSBT = await contract.verify(connectedAddress);
+
+        if (hasSBT) {
+          setValidationMessage("Validación exitosa: El certificado es válido.");
+          setIsValidationSuccess(true);
+        } else {
+          setValidationMessage("Validación fallida: No posee el certificado requerido.");
+          setIsValidationSuccess(false);
+        }
+      } else {
+        setValidationMessage("Validación fallida: Por favor, complete todos los campos.");
+        setIsValidationSuccess(false);
+      }
+    } catch (error) {
+      console.error("Error en la verificación:", error);
+      setValidationMessage("Error en la verificación. Consulte la consola para más detalles.");
       setIsValidationSuccess(false);
     }
   };
